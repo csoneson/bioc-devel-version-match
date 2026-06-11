@@ -38,7 +38,7 @@ force_retrieval <- FALSE
 # ... get the GitHub repository from the URL field (which can contain multiple links)
 .get_github_repo <- function(url) {
     # split string by spaces, commas, newlines
-    url <- trimws(unlist(strsplit(url, ", |\n|,\n|,")))
+    url <- sub("/issues", "", trimws(unlist(strsplit(url, ", |\n|,\n|,"))))
     # grab only the entry pointing to a GitHub repository
     url <- url[grepl("github.com", url)]
     # extract repository name (if there are multiple GitHub repositories, 
@@ -83,13 +83,17 @@ force_retrieval <- FALSE
 # retrieve information about all Bioc packages, and check how many have a 
 # GitHub repository in the URL field (we only analyze these further)
 pl <- BiocPkgTools::biocPkgList()
-table(grepl("github.com", pl$URL))
+table(url = grepl("github.com", pl$URL), 
+      bugreports = grepl("github.com", pl$BugReports))
     
 if (!file.exists(outfile) || force_retrieval) {
     # retrieve version for packages with GitHub URL
     pl_with_github_url <- pl |> 
-        dplyr::filter(grepl("github.com", URL)) |>
-        dplyr::mutate(Repo = vapply(URL, .get_github_repo, "")) |>
+        dplyr::filter(grepl("github.com", URL) | 
+                          grepl("github.com", BugReports)) |>
+        dplyr::mutate(Repo1 = vapply(URL, .get_github_repo, ""),
+                      Repo2 = vapply(BugReports, .get_github_repo, "")) |>
+        dplyr::mutate(Repo = ifelse(Repo1 == "" | is.na(Repo1), Repo2, Repo1)) |>
         dplyr::mutate(GitHubVersion = vapply(Repo, .get_github_version, "")) |>
         dplyr::select(Package, Repo, Version, GitHubVersion)
     
@@ -167,7 +171,7 @@ DT::datatable(pl_newer_on_bioc |>
 # check whether packages with newer version on Bioconductor have patch 
 # version 0 (this could, but doesn't have to, indicate that no changes have 
 # been made to the package code upstream - at least not in the current branch)
-table(as.character(pl_newer_on_bioc$Version[, 3]))
+table(as.numeric(as.character(pl_newer_on_bioc$Version[, 3])))
 
 # check the difference in the major/minor version
 # stratify based on whether the package version on GitHub is corresponding 
